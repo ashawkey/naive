@@ -1,104 +1,84 @@
-from naive.ode import *
-from naive.constants import *
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from functools import partial
+from naive.optimize import *
+import numpy as np
+import time
+import inspect
 
-class plotter:
-    def __init__(self):
-        self.f = plt.figure()
-        self.ax = self.f.add_subplot(111)
-    
-    def plot(self, xs, ys, label):
-        self.ax.plot(xs, ys, label=label)
-    
-    def show(self):
-        plt.legend()
-        plt.show()
+class timer:
+    def __enter__(self):
+        self.time = time.clock()
+        return self
+    def __exit__(self, type, value, traceback):
+        print(f"[TIME] {time.clock() - self.time:.4f}s")
 
-def problem_6_2():
-    end_point = 1
-
-    def f(x, y):
-        return 100 * y
-
-    fig = plotter()
-
-    for epsilon in [0, 0.0001, 0.001, 0.01, 0.1]:
-        xs, ys = euler_forward(f, 0, end_point, 1+epsilon)
-        print(f'epsilon={epsilon}, y({end_point})={ys[-1]}')
-        fig.plot(xs, ys, str(epsilon))
-
-    fig.show()
-
-def problem_program_6_1():
-    def f(x, y):
-        return - 1/(x**2) - y/x - y**2
-    
-    fig = plotter()
-    
-    xs, ys0 = euler_forward(f, 1, 2, -1)
-    fig.plot(xs, ys0, 'euler')
-
-    xs, ys1 = euler_multistep_ac(f, 1, 2, -1)
-    fig.plot(xs, ys1, 'euler_improved')
-
-    # ground truth
-    from scipy.integrate import ode
-    solver = ode(f)
-    solver.set_initial_value(-1, 1)
-    ys = [-1]
-    x = 1
-    for x in xs[1:]:
-        solver.integrate(x)
-        ys.append(solver.y)
-    fig.plot(xs, ys, 'ground truth')
-
-    print("error euler: ", np.linalg.norm(np.array(ys0)-np.array(ys), 1))
-    print("error euler_improved: ", np.linalg.norm(np.array(ys1)-np.array(ys), 1))
-
-
-    fig.show()
-
-def problem_program_6_4(subproblem=1):
-    def f(t, ys, sigma=10, rou=28, beta=8/3):
-        x, y, z = ys[0], ys[1], ys[2]
-        return np.array([sigma*(y-x), rou*x-y-x*z, x*y-beta*z])
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # (1)
+def program_problem_3_2(n=2, subproblem=1):
     if subproblem == 1:
-        for init_point in [[1,0,0], [100,0,0], [1,1,1], [100,100,100]]:
-            xs, ys = runge_kutta(f, 0, 100, np.array(init_point), dx=0.01)
-            ys = np.stack(ys)
-            ax.plot(ys[:,0], ys[:,1], ys[:,2], label='[' + ','.join([str(x) for x in init_point]) + ']')
-
-    # (2)
+        def f(x):
+            '''
+            Waston Function. 2 <= n <= 31.
+            '''
+            res = 0
+            for i in range(1, 30):
+                r = -1
+                for j in range(2, n+1):
+                    r += (j - 1) * x[j-1] * (i/29)**(j-2)
+                tmp = 0
+                for j in range(1, n+1):
+                    tmp += x[j-1] * (i/29)**(j-1)
+                r -= tmp**2
+                res += r**2
+            res += x[0]**2
+            res += (x[1] - x[0]**2 - 1)**2
+            return res
+        x0 = np.zeros(n)
+        
     elif subproblem == 2:
-        """
-        for params in [[10,28,8/3], [10/3, 28/3, 8/9], [30, 84, 8]]:
-            xs, ys = runge_kutta(partial(f, sigma=params[0], rou=params[1], beta=params[2]), 0, 50, np.array([1,0,0]), dx=0.01)
-            ys = np.stack(ys)
-            ax.plot(ys[:,0], ys[:,1], ys[:,2], label='[' + ','.join([str(x) for x in params]) + ']')
-        """
-        for params in [[10,28,8/3], [10, 28, 0], [10, 0, 8/3], [0, 28, 8/3], [10, 10, 8/3], [10, 99.96, 8/3]]:
-            xs, ys = runge_kutta(partial(f, sigma=params[0], rou=params[1], beta=params[2]), 0, 50, np.array([1,1,1]), dx=0.01)
-            ys = np.stack(ys)
-            ax.plot(ys[:,0], ys[:,1], ys[:,2], label='[' + ','.join([str(x) for x in params]) + ']')
+        h = 1/(n+1)
+        def t(i):
+            return i * h
+        def f(x):
+            '''
+            Discrete Boundary Value Function
+            '''
+            res = 0
+            for i in range(n):
+                if i == 0:
+                    r = 2 * x[i] - x[i+1] + h**2 * (x[i] + t(i+1) + 1)**3 / 2
+                elif i == n-1:
+                    r = 2 * x[i] - x[i-1] + h**2 * (x[i] + t(i+1) + 1)**3 / 2
+                else:
+                    r = 2 * x[i] - x[i-1] - x[i+1] + h**2 * (x[i] + t(i+1) + 1)**3 / 2
+                res += r**2
+            return res
+        x0 = [t(i+1)*(t(i+1)-1) for i in range(n)]
     
-    plt.legend()
-    plt.show()
+    elif subproblem == 0:
+        def f(x):
+            '''
+            simple test
+            '''
+            G = np.array([[21,4],[4,15]])
+            b = np.array([2,3])
+            c = 10
+            return x @ G @ x / 2 + b @ x + c
+        x0 = [-30, 100]
+
+    for method in [SteepestDescent, 
+                   Newton, 
+                   partial(QuasiNewton, method='SR1'),
+                   partial(QuasiNewton, method='DFP'),
+                   partial(QuasiNewton, method='BFGS'),
+                   partial(BB, method='BB1'),
+                   partial(BB, method='BB2'),
+                   ]:
+        
+        print(f"[METHOD] {method.__name__ if hasattr(method, '__name__') else method.func.__name__}, {inspect.signature(method)}")
+        with timer():
+            x = method(f, x0)
+        print(f"[X] x = {x}")
+        print(f"[Y] f(x) = {f(x)}")
+        print("")
 
 
-
-
-
-if __name__ == "__main__":
-    #problem_6_2()
-    problem_program_6_1()
-    problem_program_6_4(1)
-    problem_program_6_4(2)
-
-    
+if __name__ == '__main__':
+    #program_problem_3_2(10, 1)
+    program_problem_3_2(16, 2)

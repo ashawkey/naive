@@ -1,6 +1,6 @@
 import numpy as np
-from naive.differentiation import diff
-from naive.constants import *
+from . differentiation import diff
+from . constants import *
 
 def euler_forward(f, x0, x1, y0, dx=DX):
     """

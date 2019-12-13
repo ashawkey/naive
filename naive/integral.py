@@ -1,5 +1,5 @@
 import numpy as np
-from naive.constants import *
+from . constants import *
 
 def integral_mid(f, a, b):
     return f((a+b)/2) * (b-a)
